@@ -30,6 +30,9 @@ class Container extends EventEmitter{
     } = {}){
         super();
 
+        //all sockets connected to this container
+        this._sockets = new Set();
+
         this._stateAccessor = stateAccessor;
 
         const self = this;
@@ -81,54 +84,77 @@ class Container extends EventEmitter{
     getState(){
         return this._stateAccessor(this.store.getState());
     }
+    attach(socket){
+        const eventWithReset = (self, k, f, on = 'on', off = 'off') => {
+            self[on].call(self, k, f);
+            return () => self[off].call(self, k, f);
+        };
+
+        if(this._sockets.has(socket)){
+            throw new Error('cannot reattach container to socket for a twice');
+        }
+
+        const resets = [];
+
+        this._sockets.add(socket);
+        resets.push(() => this._sockets.delete(socket));
+
+        const client = { id: uuidv4() };
+        const log = (...msg) => {
+            if(DEBUG)
+                console.log(`${client.id}:`, ...msg);
+        };
+    
+        const sendChange = (data) => {
+            if(!data.client || data.client.id === client.id)
+                return;
+    
+            log("EMIT change", data);
+            socket.emit('change', data);
+        };
+    
+        const sendReplace = (state) => {
+            const data = {data: state || this.getState()};
+            log("EMIT replace", data);
+            socket.emit('replace', data);    
+        }
+        resets.push(
+            eventWithReset(this, 'change', sendChange)
+        );
+        resets.push(
+            eventWithReset(this, `replace_${client.id}`, sendReplace)
+        )
+    
+        //send replace on connect
+        sendReplace();
+    
+        resets.push( 
+            eventWithReset(socket, 'change', (data) => {
+                log("RECV change", data);
+                this.change(data, client);
+                log(this.getState());
+            }) 
+        );
+    
+        resets.push(
+            eventWithReset( socket, 'requestReplace', (data) => {
+                log("RECV requestReplace", data);
+                sendReplace();
+            })
+        );
+    
+    
+        resets.push( 
+            eventWithReset(socket, 'disconnect', () => {
+                log("destroy event handlers");
+                this.removeListener('change', sendChange);
+            })
+        );
+    
+        log("NEW CONNECTION ns_1");    
+
+        return () => resets.forEach((f) => f());
+    }
 }
 
 export default Container;
-
-export function connectContainer(data_container, socket){
-    const client = { id: uuidv4() };
-    const log = (...msg) => {
-        if(DEBUG)
-            console.log(`${client.id}:`, ...msg);
-    };
-
-    const sendChange = (data) => {
-        if(!data.client || data.client.id === client.id)
-            return;
-
-        log("EMIT change", data);
-        socket.emit('change', data);
-    };
-
-    const sendReplace = (state) => {
-        const data = {data: state || data_container.getState()};
-        log("EMIT replace", data);
-        socket.emit('replace', data);    
-    }
-
-    data_container.on('change', sendChange);
-    data_container.on(`replace_${client.id}`, sendReplace);
-
-    //send replace on connect
-    sendReplace();
-
-    socket.on('change', (data) => {
-        log("RECV change", data);
-        data_container.change(data, client);
-        log(data_container.getState());
-    });
-
-    socket.on('requestReplace', (data) => {
-        log("RECV requestReplace", data);
-        sendReplace();
-    });
-
-
-    socket.on('disconnect', () => {
-        log("destroy event handlers");
-        data_container.removeListener('change', sendChange);
-    });
-
-    log("NEW CONNECTION ns_1");    
-
-}
