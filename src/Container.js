@@ -153,6 +153,10 @@ class Container extends EventEmitter{
     
         log("NEW CONNECTION ns_1");    
 
+        log("EMIT start");
+        socket.emit('start');
+
+
         return () => resets.forEach((f) => f());
     }
 }

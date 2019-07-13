@@ -37,6 +37,7 @@ ns_1.on('connection', socket => {
     let removeListeners;
     socket.on('initseed', (data) => {
         console.log(`received INITSEED`, JSON.stringify(data));
+//        socket.emit('unauthorized', {message:" SOME BULLSHIT MESSAGE"});
         removeListeners = containerHolder.attach(socket, data);
     });
 
