@@ -106,7 +106,7 @@ class Container extends EventEmitter{
         };
     
         const sendChange = (data) => {
-            if(!data.client || data.client.id === client.id)
+            if(data.client && data.client.id === client.id)
                 return;
     
             log("EMIT change", data);

@@ -37,8 +37,7 @@ ns_1.on('connection', socket => {
     let removeListeners;
     socket.on('initseed', (data) => {
         console.log(`received INITSEED`, JSON.stringify(data));
-        const container = containerHolder.getContainer(data);
-        removeListeners = container.attach(socket);
+        removeListeners = containerHolder.attach(socket, data);
     });
 
     socket.on('disconnect', () => {
